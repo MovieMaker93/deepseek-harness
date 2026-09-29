@@ -42,6 +42,9 @@ kind: "package-reference"
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `default` | 必填 | 未显式指定时使用的 preset ID |
+| `aliases` | `{}` | 从已退役 preset ID 到已声明 preset ID 的映射；请求或会话记录中的退役 ID 解析为目标 ID |
+
+会话记录其运行时的 preset ID，且只在该 ID 下恢复。部署移除某个 preset 后（例如旧版 dsh 从目录读取的 preset），`aliases: { standard-tools: standard }` 让记录为 `standard-tools` 的会话在 `standard` 下恢复。与别名同 ID 的声明注册失败；目标未声明的别名在报错中同时给出两个 ID。
 
 Web 内置定义来自 `dsh-web-app` bundle。定义使用普通插件行；注册表不扫描目录，也不接受 preset 路径。`agent-preset-registry` 条目的 volatile 字段 `selectedDefault` 保留用户默认值，新会话优先使用它而不是部署 `default`。profile patch 仍可能带有已废弃的 `modeSelectionEnabled` 字段；注册表未声明该字段，既不读取也不重写它。
 
@@ -55,7 +58,7 @@ Web 内置定义来自 `dsh-web-app` bundle。定义使用普通插件行；注�
 
 每个声明在启动时创建注册表拥有的 scope 和内存 Loader 树。更新或移除声明会让旧代际退役；Agent、子 Agent 和临时历史读取各自持有引用，最后一个引用释放后才销毁插件树。插件注册继承 preset scope，Agent scope 的父链接决定可见性；Agent loop 仍由宿主共享。
 
-激活审计检查导入失败、缺失服务和向全局泄漏的服务。导入失败、激活失败和泄漏会拒绝挂载。等待 Host 服务的行保持挂载，每次读取和绑定都在 Host Loader 树结算后重新审计，因此启动顺序不决定结果。失败只禁用该定义的新绑定。会话日志保存 preset ID 和空白会话的切换记录；重启恢复使用该 ID 的当前定义，缺失时拒绝恢复。
+激活审计检查导入失败、缺失服务和向全局泄漏的服务。导入失败、激活失败和泄漏会拒绝挂载。等待 Host 服务的行保持挂载，每次读取和绑定都在 Host Loader 树结算后重新审计，因此启动顺序不决定结果。失败只禁用该定义的新绑定。会话日志保存 preset ID 和空白会话的切换记录；重启恢复使用该 ID（或其配置的别名目标）的当前定义，缺失时拒绝恢复。
 
 | 文件 | 职责 |
 |---|---|

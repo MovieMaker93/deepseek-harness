@@ -13,6 +13,8 @@ export interface AgentPreset {
 export interface Config {
   /** Deployment default when the caller omits a preset. */
   default: string
+  /** Retired preset ID to the declared preset that resolves in its place, e.g. for Sessions recorded under a removed preset. */
+  aliases: Readonly<Record<string, string>>
   /** User-selected default; edited through Settings. */
   selectedDefault: Volatile<string | undefined>
 }

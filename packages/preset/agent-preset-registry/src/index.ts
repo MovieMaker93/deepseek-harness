@@ -52,6 +52,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
   static inject = ['loader', 'sessionProjections']
   static Config = z.object({
     default: z.string().required(),
+    aliases: z.dict(z.string()).default({}),
     selectedDefault: z.string().volatile(),
   })
   private readonly owner: Context
@@ -81,6 +82,8 @@ export class AgentPresetRegistry extends TypertRemoteService {
     const context = this.ctx
     if (!definition.id.trim()) throw new Error('Preset id must not be empty')
     if (this.definitions.has(definition.id)) throw new Error(`Duplicate agent preset: ${definition.id}`)
+    const aliasTarget = this.config.aliases[definition.id]
+    if (aliasTarget !== undefined) throw new Error(`Agent preset ${definition.id} is also configured as an alias of ${aliasTarget}`)
     const record: Definition = { config: definition, context, ready: Promise.resolve() }
     this.definitions.set(definition.id, record)
     let disposed = false
@@ -178,12 +181,25 @@ export class AgentPresetRegistry extends TypertRemoteService {
    * @returns Current metadata, including failure when activation failed.
    */
   async resolve(id?: string): Promise<AgentPreset> {
-    const wanted = id ?? this.defaultId
+    const requested = id ?? this.defaultId
+    const wanted = this.definitionId(requested)
     const record = this.definitions.get(wanted)
-    if (record === undefined) throw new RemoteError('agent-preset/not-found', `Unknown agent preset: ${wanted}`,
-      { agentPreset: wanted, available: [...this.definitions.keys()] })
+    if (record === undefined) throw this.notFound(requested)
     const broken = await this.diagnostic(record)
     return { id: wanted, ...(broken === undefined ? {} : { broken }) }
+  }
+
+  /** The declared preset ID `id` names: its configured alias target, otherwise `id` itself. */
+  private definitionId(id: string): string {
+    return this.config.aliases[id] ?? id
+  }
+
+  private notFound(requested: string): RemoteError<'agent-preset/not-found'> {
+    const wanted = this.definitionId(requested)
+    const message = wanted === requested
+      ? `Unknown agent preset: ${requested}. To resume Sessions recorded under a removed preset, map its ID to a declared preset in the agent-preset-registry aliases config.`
+      : `Unknown agent preset: ${wanted} (alias of ${requested})`
+    return new RemoteError('agent-preset/not-found', message, { agentPreset: requested, available: [...this.definitions.keys()] })
   }
 
   /** Read one declaration's child plugin list as YAML, for viewing only.
@@ -192,11 +208,8 @@ export class AgentPresetRegistry extends TypertRemoteService {
    */
   @Remote('read')
   readDocument(agentPreset: string): Promise<AgentPresetDocument> {
-    const record = this.definitions.get(agentPreset)
-    if (record === undefined) {
-      return Promise.reject(new RemoteError('agent-preset/not-found', `Unknown agent preset: ${agentPreset}`,
-        { agentPreset, available: [...this.definitions.keys()] }))
-    }
+    const record = this.definitions.get(this.definitionId(agentPreset))
+    if (record === undefined) return Promise.reject(this.notFound(agentPreset))
     const { id, name, description, plugins } = record.config
     // The Loader's own dialect, so `!!js` conditions read as declared rather than as expression objects.
     const content = dump(plugins, { schema: entryListSchema, noRefs: true, lineWidth: -1 })
@@ -206,11 +219,11 @@ export class AgentPresetRegistry extends TypertRemoteService {
   }
 
   private async retain(id?: string): Promise<Generation> {
-    const wanted = id ?? this.defaultId
+    const requested = id ?? this.defaultId
+    const wanted = this.definitionId(requested)
     while (true) {
       const record = this.definitions.get(wanted)
-      if (record === undefined) throw new RemoteError('agent-preset/not-found', `Unknown agent preset: ${wanted}`,
-        { agentPreset: wanted, available: [...this.definitions.keys()] })
+      if (record === undefined) throw this.notFound(requested)
       const broken = await this.diagnostic(record)
       if (this.definitions.get(wanted) !== record) continue
       const generation = record.generation

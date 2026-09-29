@@ -42,6 +42,9 @@ Choose an Agent’s tools, prompt sections and skills through declarative preset
 | Field | Default | Meaning |
 |---|---|---|
 | `default` | required | Preset ID used when none is requested |
+| `aliases` | `{}` | Map from a retired preset ID to a declared preset ID; a request or recorded Session naming the retired ID resolves to the target |
+
+A Session records the preset ID it runs under and resumes only under that ID. When a deployment removes a preset, for example a preset that an older dsh read from a directory, `aliases: { standard-tools: standard }` lets Sessions recorded under `standard-tools` resume on `standard`. A declaration whose ID is also an alias fails to register; an alias whose target is not declared reports both IDs.
 
 The Web definitions come from the `dsh-web-app` bundle. Definitions are ordinary plugin rows; the registry neither scans directories nor accepts preset paths. The `selectedDefault` volatile field of the `agent-preset-registry` entry retains the user default, which new sessions resolve over the deployment `default`. A profile patch may still carry the retired `modeSelectionEnabled` field; the registry declares no such field and neither reads nor rewrites it.
 
@@ -55,7 +58,7 @@ The registry writes no declarations. The `read` Remote renders one declaration�
 
 Each declaration eagerly creates a registry-owned scope and an in-memory Loader tree. Updating or removing a declaration retires its previous revision. Agents, children and temporary historical reads retain references; releasing the final reference disposes the retired tree. Plugin registrations inherit the preset scope, and the Agent scope’s parent link controls visibility. The Host continues to share the Agent loop.
 
-Activation auditing checks imports, missing services and globally leaked services. Import failures, activation failures and leaks reject the mount. A row waiting for a Host service stays mounted, and every read and binding re-audits it after the Host Loader tree settles, so startup order does not decide the outcome. Failure prevents new bindings to that definition. Session logs retain the preset ID and blank-session selections; recovery after restart uses the current definition of that ID and rejects a missing definition.
+Activation auditing checks imports, missing services and globally leaked services. Import failures, activation failures and leaks reject the mount. A row waiting for a Host service stays mounted, and every read and binding re-audits it after the Host Loader tree settles, so startup order does not decide the outcome. Failure prevents new bindings to that definition. Session logs retain the preset ID and blank-session selections; recovery after restart uses the current definition of that ID, or of its configured alias target, and rejects a missing definition.
 
 | File | Responsibility |
 |---|---|

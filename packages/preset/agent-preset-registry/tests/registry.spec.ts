@@ -77,6 +77,33 @@ describe('declarative preset revisions', () => {
     expect(roster.presets.find(row => row.id === 'standard')?.isDefault).toBe(true)
   })
 
+  it('resolves, mounts and reads a retired preset ID through its configured alias', async () => {
+    const ctx = await harness({ aliases: { 'standard-tools': 'standard' } })
+    contexts.push(ctx)
+    await declare(ctx, contribution('standard'))
+    expect(await ctx.agentPresets.resolve('standard-tools')).toEqual({ id: 'standard' })
+    const resumed = await agentOn(ctx, 'recorded-under-retired-preset', 'standard-tools')
+    expect(ctx.tools.schemas(resumed).map(row => row.name)).toEqual(['standard'])
+    expect((await ctx.agentPresets.readDocument('standard-tools')).agentPreset).toBe('standard')
+    expect((await ctx.agentPresets.remoteExportList()).presets.map(row => row.id)).toEqual(['standard'])
+  })
+
+  it('names the alias when its target is not declared, and how to map an unknown ID', async () => {
+    const ctx = await harness({ aliases: { retired: 'absent' } })
+    contexts.push(ctx)
+    await declare(ctx, contribution('standard'))
+    await expect(ctx.agentPresets.resolve('retired')).rejects.toThrow('Unknown agent preset: absent (alias of retired)')
+    await expect(ctx.agentPresets.resolve('other')).rejects.toThrow(/Unknown agent preset: other\. .*aliases config/)
+  })
+
+  it('rejects a definition whose ID is also configured as an alias', async () => {
+    const ctx = await harness({ aliases: { retired: 'standard' } })
+    contexts.push(ctx)
+    await declare(ctx, contribution('standard'))
+    await expect(declare(ctx, contribution('retired'))).rejects.toThrow('Agent preset retired is also configured as an alias of standard')
+    expect(await ctx.agentPresets.resolve('retired')).toEqual({ id: 'standard' })
+  })
+
   it('rejects duplicate IDs without disposing the first definition', async () => {
     const ctx = await setup()
     await declare(ctx, contribution('standard'))
