@@ -953,7 +953,11 @@ function modelRouteValue(value: SessionFormatJsonValue | undefined, label: strin
 }
 
 function subagentDescriptorValue(data: JsonRecord, label: string): void {
-  literalValue(data['version'], [3], `${label} version`)
+  // Releases dsh 0.0.1-rc.1 through 0.1.1-rc.2 wrote descriptor v2; v3 only adds the optional agentReasoningEffort.
+  literalValue(data['version'], [2, 3], `${label} version`)
+  if (data['version'] === 2 && data['agentReasoningEffort'] !== undefined) {
+    throw new SessionFormatError(`${label} agentReasoningEffort requires descriptor version 3`)
+  }
   nonEmptyString(data['provider'], `${label} provider`)
   if (data['mode'] === 'one-shot') {
     assertReleasedV0Keys(data, ['mode', 'version', 'provider'], ['label'], `${label} data`)

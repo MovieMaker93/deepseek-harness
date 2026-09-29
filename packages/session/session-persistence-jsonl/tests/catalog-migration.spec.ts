@@ -361,6 +361,21 @@ describe.each(['none', 'zstd'] as const)('historical catalog publication (%s)', 
     expect((await readdir(dirname(parentPath))).filter(name => name !== 'session.lock')).toHaveLength(2)
   })
 
+  it.each(['read', 'write'] as const)('opens a V0 child whose released writer stamped descriptor v2 through %s access', async (access) => {
+    const f = await fixture()
+    await rm(generationLogPath(f.root, undefined, f.parent, 3, compression))
+    await f.write(f.parent, [], false, 0)
+    const descriptor = { ...f.descriptor, data: { ...f.descriptor.data, version: 2 } }
+    const childPath = await f.write('child', [descriptor], true, 0)
+    const before = await readFile(childPath)
+    expect(await f.read()).toMatchObject([{ type: 'subagent/catalog', data: { childId: 'child', mode: 'continuable', label: 'old child' } }])
+    const child = await f.ctx.sessionPersistence.open(SessionId('child'), access)
+    try {
+      expect((await child.read()).events).toMatchObject([{ type: 'subagent/descriptor', data: { version: 2, mode: 'continuable' } }])
+    } finally { await child.close() }
+    expect(await readFile(childPath)).toEqual(before)
+  })
+
   it('lists historical headers, prepares read-only membership, and publishes an unchanged-prefix successor', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-catalog-migration-'))
     roots.push(root)

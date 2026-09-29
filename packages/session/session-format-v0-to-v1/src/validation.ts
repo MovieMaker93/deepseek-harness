@@ -195,7 +195,8 @@ export function assertReleasedEventPayload(event: SessionFormatEvent, version: 0
     )
   }
   const data = releasedV0Record(event.data, `${event.type} ${event.seq} data`)
-  if (event.type === 'subagent/descriptor' && data['version'] !== 3) {
+  // Released v0 writers stamped descriptor v2 or v3; the payload check below validates both.
+  if (event.type === 'subagent/descriptor' && data['version'] !== 3 && data['version'] !== 2) {
     const descriptorVersion = sessionFormatCount(data['version'], `${event.type} ${event.seq} version`)
     if (version === 0) {
       throw new SessionFormatUnsupportedMigrationError(

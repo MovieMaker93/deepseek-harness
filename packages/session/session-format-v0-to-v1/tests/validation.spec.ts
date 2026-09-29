@@ -398,6 +398,35 @@ describe('released event and payload inventory', () => {
     expect(restoreV1(v1Header, [event]).events).toEqual([event])
   })
 
+  it.each([
+    ['one-shot', { mode: 'one-shot', version: 2, provider: 'in-process', label: 'child' }],
+    ['continuable', {
+      mode: 'continuable', version: 2, provider: 'in-process', label: 'child',
+      agentProvider: 'mock', agentModel: 'mock', persona: 'persona', toolFilter: { deny: ['write'] },
+    }],
+  ] as const)('migrates a released v0 %s descriptor v2 unchanged', (_mode, data) => {
+    const event = { type: 'subagent/descriptor', seq: 0, time: 1, data }
+    expect(restoreV0ToV1(v0Header, [event]).events).toEqual([event])
+  })
+
+  it.each([
+    ['a v3-only member', {
+      mode: 'continuable', version: 2, provider: 'in-process', label: 'child',
+      agentProvider: 'mock', agentModel: 'mock', agentReasoningEffort: 'high',
+    }, /agentReasoningEffort requires descriptor version 3/],
+    ['an unpaired model route', {
+      mode: 'continuable', version: 2, provider: 'in-process', label: 'child', agentProvider: 'mock',
+    }, /agentProvider and agentModel must be paired/],
+  ] as const)('refuses a v0 descriptor v2 with %s', (_name, data, error) => {
+    const event = { type: 'subagent/descriptor', seq: 0, time: 1, data }
+    expect(() => restoreV0ToV1(v0Header, [event])).toThrow(error)
+  })
+
+  it('refuses a v0 descriptor version that no release wrote', () => {
+    const event = { type: 'subagent/descriptor', seq: 0, time: 1, data: { version: 1, provider: 'in-process', label: 'child' } }
+    expect(() => restoreV0ToV1(v0Header, [event])).toThrow(/unsupported descriptor version 1/)
+  })
+
   it('accepts every released nested union variant and optional member', () => {
     const sources: SessionFormatJsonValue[] = [
       { kind: 'user', rpcId: 'rpc-1', clientTimeZone: 'Asia/Shanghai' },
